@@ -1,13 +1,3 @@
-#
-# Copyright (C) 2023-2024 by YukkiOwner@Github, < https://github.com/YukkiOwner >.
-#
-# This file is part of < https://github.com/YukkiOwner/YukkiMusicBot > project,
-# and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/YukkiOwner/YukkiMusicBot/blob/master/LICENSE >
-#
-# All rights reserved.
-#
-
 import os
 import re
 import textwrap
@@ -30,44 +20,28 @@ def changeImageSize(maxWidth, maxHeight, image):
     return newImage
 
 
+
 async def gen_thumb(videoid):
-    if os.path.isfile(f"cache/{videoid}.png"):
-        return f"cache/{videoid}.png"
+    cache_path = f"cache/{videoid}.png"
+    os.makedirs("cache", exist_ok=True)
 
     url = f"https://www.youtube.com/watch?v={videoid}"
     try:
-        results = VideosSearch(url, limit=1)
-        for result in (await results.next())["result"]:
-            try:
-                title = result["title"]
-                title = re.sub("\W+", " ", title)
-                title = title.title()
-            except:
-                title = "Unsupported Title"
-            try:
-                duration = result["duration"]
-            except:
-                duration = "Unknown Mins"
+        results = VideosSearch(url, limit=1).result()
+        for result in results["result"]:
+            title = result.get("title", "Unsupported Title")
+            title = re.sub("\W+", " ", title).title()
             thumbnail = result["thumbnails"][0]["url"].split("?")[0]
-            try:
-                views = result["viewCount"]["short"]
-            except:
-                views = "Unknown Views"
-            try:
-                channel = result["channel"]["name"]
-            except:
-                channel = "Unknown Channel"
+            result.get("viewCount", {}).get("short", "Unknown Views")
+            result.get("channel", {}).get("name", "Unknown Channel")
 
         async with aiohttp.ClientSession() as session:
             async with session.get(thumbnail) as resp:
                 if resp.status == 200:
-                    f = await aiofiles.open(
-                        f"cache/thumb{videoid}.png", mode="wb"
-                    )
-                    await f.write(await resp.read())
-                    await f.close()
+                    async with aiofiles.open(cache_path, mode="wb") as f:
+                        await f.write(await resp.read())
 
-        youtube = Image.open(f"cache/thumb{videoid}.png")
+        youtube = Image.open(cache_path)
         image1 = changeImageSize(1280, 720, youtube)
         image2 = image1.convert("RGBA")
         background = image2.filter(filter=ImageFilter.BoxBlur(30))
@@ -80,72 +54,40 @@ async def gen_thumb(videoid):
         x2 = Xcenter + 250
         y2 = Ycenter + 250
         logo = youtube.crop((x1, y1, x2, y2))
-        logo.thumbnail((520, 520), Image.ANTIALIAS)
+        logo.thumbnail((350, 350), Image.LANCZOS)
         logo = ImageOps.expand(logo, border=15, fill="white")
-        background.paste(logo, (50, 100))
+        background.paste(logo, (465, 100))
         draw = ImageDraw.Draw(background)
-        font = ImageFont.truetype("assets/font2.ttf", 40)
-        font2 = ImageFont.truetype("assets/font2.ttf", 70)
+        font = ImageFont.truetype("assets/font2.ttf", 45)
+        ImageFont.truetype("assets/font2.ttf", 70)
         arial = ImageFont.truetype("assets/font2.ttf", 30)
-        name_font = ImageFont.truetype("assets/font.ttf", 30)
+        ImageFont.truetype("assets/font.ttf", 30)
         para = textwrap.wrap(title, width=32)
-        j = 0
+        if para:
+            text_bbox = draw.textbbox((0, 0), para[0], font=font)
+            draw.text(
+                ((1280 - text_bbox[2]) / 2, 530),
+                para[0],
+                fill="white",
+                stroke_width=1,
+                stroke_fill="white",
+                font=font,
+            )
+        if len(para) > 1:
+            text_bbox = draw.textbbox((0, 0), para[1], font=font)
+            draw.text(
+                ((1280 - text_bbox[2]) / 2, 580),
+                para[1],
+                fill="white",
+                stroke_width=1,
+                stroke_fill="white",
+                font=font,
+            )
+        text_bbox = draw.textbbox((0, 0), f"Streaming Now", font=arial)
         draw.text(
-            (5, 5), f"{MUSIC_BOT_NAME}", fill="white", font=name_font
+            ((1280 - text_bbox[2]) / 2, 660), f"Streaming Now", fill="white", font=arial
         )
-        draw.text(
-            (600, 150),
-            "NOW PLAYING",
-            fill="white",
-            stroke_width=2,
-            stroke_fill="white",
-            font=font2,
-        )
-        for line in para:
-            if j == 1:
-                j += 1
-                draw.text(
-                    (600, 340),
-                    f"{line}",
-                    fill="white",
-                    stroke_width=1,
-                    stroke_fill="white",
-                    font=font,
-                )
-            if j == 0:
-                j += 1
-                draw.text(
-                    (600, 280),
-                    f"{line}",
-                    fill="white",
-                    stroke_width=1,
-                    stroke_fill="white",
-                    font=font,
-                )
-
-        draw.text(
-            (600, 450),
-            f"Views : {views[:23]}",
-            (255, 255, 255),
-            font=arial,
-        )
-        draw.text(
-            (600, 500),
-            f"Duration : {duration[:23]} Mins",
-            (255, 255, 255),
-            font=arial,
-        )
-        draw.text(
-            (600, 550),
-            f"Channel : {channel}",
-            (255, 255, 255),
-            font=arial,
-        )
-        try:
-            os.remove(f"cache/thumb{videoid}.png")
-        except:
-            pass
-        background.save(f"cache/{videoid}.png")
-        return f"cache/{videoid}.png"
+        background.save(cache_path)
+        return cache_path
     except Exception:
         return YOUTUBE_IMG_URL
